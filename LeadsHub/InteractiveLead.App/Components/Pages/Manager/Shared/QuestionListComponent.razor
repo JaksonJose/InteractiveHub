@@ -1,0 +1,20 @@
+﻿@using AdaptiveKitCore.Requests
+@using InteractiveLead.App.Components.Pages.Manager.Adapters
+
+@inject QuestionAdapter _questionAdapter; 
+
+@code {
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        FetchAllQuestionAsync();
+    }
+
+    public async Task FetchAllQuestionAsync() 
+    {
+        FilterRequest filterRequest = new();
+
+        var response = await _questionAdapter.FetchAllQuestionByRequest(filterRequest);
+    }
+}

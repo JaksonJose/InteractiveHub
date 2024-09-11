@@ -1,0 +1,76 @@
+﻿@using InteractiveLead.Core.Enums
+@using Microsoft.AspNetCore.Components.Authorization
+@using InteractiveLead.App.Providers
+
+@inherits LayoutComponentBase
+
+@inject NavigationManager _navigation
+
+<AuthorizeView>
+    <NotAuthorized>
+        @Body
+    </NotAuthorized>
+    <Authorized>
+        <RadzenLayout>
+            <RadzenHeader>
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" Gap="0">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0">
+                        <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" />
+                        <RadzenLabel Text="Interactive Leads" />
+                    </RadzenStack>
+
+                    <RadzenStack Orientation="Orientation.Horizontal">
+                        <RadzenText Text="@context.User.Identity?.Name" />
+                        <form action="Account/Logout" method="post">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                            <RadzenButton ButtonType="ButtonType.Submit" Icon="logout" />
+                        </form>
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenHeader>
+            <RadzenSidebar Responsive="false" Style="width: max-content">
+                <RadzenPanelMenu DisplayStyle="@(sidebarExpanded ? MenuItemDisplayStyle.IconAndText : MenuItemDisplayStyle.Icon)" ShowArrow="true">
+                    <RadzenPanelMenuItem Text="Dashboard" Icon="dashboard" />
+                    <RadzenPanelMenuItem Text="Leads" Icon="groups" Path="/" />
+                    <RadzenPanelMenuItem Text="Agenda" Icon="calendar_month" Path="/calendar" />
+                    <RadzenPanelMenuItem Text="Administração" Icon="settings" Visible="@(context.User.IsInRole(RolesEnum.SysAdmin.Name))">
+                        <RadzenPanelMenuItem Text="Usuários" Icon="manage_accounts" Path="/admin/consultants" />
+                    </RadzenPanelMenuItem>
+                </RadzenPanelMenu>
+            </RadzenSidebar>
+            <RadzenBody Style="padding: 0">
+                <div>
+                    @Body
+                </div>
+            </RadzenBody>
+        </RadzenLayout>
+    </Authorized>
+</AuthorizeView>
+<RadzenComponents />
+
+<!-- Gets client browser time -->
+<InitializeTimeZone />
+
+@code {
+    private bool sidebarExpanded = false;
+
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = _navigation.ToBaseRelativePath(_navigation.Uri);
+        _navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = _navigation.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _navigation.LocationChanged -= OnLocationChanged;
+    }
+}

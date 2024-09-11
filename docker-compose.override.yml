@@ -1,0 +1,98 @@
+version: '3.4'
+
+services:
+  interactivedb:
+    container_name: interactivedb
+    restart: always
+    ports:
+        - "3000:5432"
+    volumes:
+      - interactive_data:/var/lib/postgresql/data
+    networks:
+      interactive_net:
+        ipv4_address: 172.19.0.2
+    environment:
+      - POSTGRES_PASSWORD=Jakson-1985
+
+  pgadmin4:
+    container_name: pgadmin4
+    restart: always
+    volumes:
+      - pgadmin4:/var/lib/pgadmin
+    networks:
+      interactive_net:
+        ipv4_address: 172.19.0.3
+      pgadmin4_net:
+    ports:
+      - 2000:80
+    environment:    
+      - PGADMIN_DEFAULT_EMAIL=jaksonjosesilva34@gmail.com
+      - PGADMIN_DEFAULT_PASSWORD=#Jack-1985
+
+  rabbitmq:
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      interactive_net:
+       ipv4_address: 172.19.0.4
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  interactivelead.app:
+    container_name: interactiveleads_app
+    restart: always
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ASPNETCORE_HTTPS_PORTS=8081
+    networks:
+      interactive_net:
+        ipv4_address: 172.19.0.5
+    ports:
+      - "5000:8080"
+      - "5001:8081"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+      - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro
+    depends_on:
+      - interactivedb
+      - rabbitmq
+  
+  whatsapp.api:
+    container_name: whatsapp_api
+    restart: always
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+#      - ASPNETCORE_HTTPS_PORTS=8081
+#      - ASPNETCORE_URLS=https://+:8081;http://+:8080
+    networks:
+      interactive_net:
+        ipv4_address: 172.19.0.6
+    ports:
+      - "7000:8080"
+      - "7001:8081"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+      - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro
+    depends_on:
+      - interactivedb
+      - rabbitmq
+
+#  meracadolivre.api:
+#    environment:
+#      - ASPNETCORE_ENVIRONMENT=Development
+#      - ASPNETCORE_HTTP_PORTS=8080
+#      - ASPNETCORE_HTTPS_PORTS=8081
+#    ports:
+#      - "8080"
+#      - "8081"
+#    volumes:
+#      - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+#      - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro

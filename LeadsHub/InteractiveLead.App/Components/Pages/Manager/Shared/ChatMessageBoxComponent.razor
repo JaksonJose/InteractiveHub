@@ -1,0 +1,198 @@
+﻿@using InteractiveLead.App.Providers
+@using InteractiveLead.App.Services
+@using InteractiveLead.Core.Enums
+@using InteractiveLead.Core.Models
+@using InteractiveLead.Core.NotifyServices
+
+@inherits AppComponentBase
+@implements IDisposable
+
+@inject IJSRuntime JSRuntime
+@inject MessageNotifyService _notificationService
+
+@{
+    /*
+     * The messages rendered in chat box
+     */
+}
+
+@foreach (ChatMessage message in ChatData)
+{
+    string messageSide = message.MessageSender.Equals(ChatMessageEnum.Customer.Name) ? "align-items-start" : "align-items-end";
+
+    <!-- Days division -->
+    if (message.MessageDate.Date != currentDate.Date)
+    {
+        currentDate = message.MessageDate;
+        string text = GetDayNamesOrDate(message.MessageDate);
+
+        <RadzenStack Orientation="Orientation.Horizontal" 
+                     JustifyContent="JustifyContent.Center" 
+                     AlignItems="AlignItems.Center" Class="rz-mt-4">
+
+            <div style="flex: 1; border: 1px solid" class="rz-border-color-primary-lighter"></div>
+            <RadzenBadge BadgeStyle="BadgeStyle.Primary" Text="@text" />
+            <div style="flex: 1;border: 1px solid;" class="rz-border-color-primary-lighter"></div>
+        </RadzenStack>      
+    }
+
+    <!-- Chat text message bubble -->
+    <div class="d-flex flex-column rz-mx-1 @messageSide">
+        @if (message.MessageSender.Equals(ChatMessageEnum.Consultant.Name))
+        {
+            string backgroundColor = AddRadzenClass(message.MessageStatus);
+
+            string border = message.MessageStatus.Equals(MessageStatusEnum.Failed.Name) ? "border: 1px solid" : "";
+
+            <RadzenCard Variant="@Variant.Filled"
+                        class="@backgroundColor"
+                        Style="@border">
+                
+                <RadzenText TextStyle="TextStyle.Body2">@message.MessageBody</RadzenText>
+
+                <RadzenStack>
+                    <RadzenText Text="@LocalDateTime(message.MessageDate).ToShortTimeString()"
+                        TextStyle="TextStyle.Caption" 
+                        TextAlign="TextAlign.Right" 
+                        Style="margin-bottom: 0; color: var(--rz-text-tertiary-color)">
+                    </RadzenText>
+                </RadzenStack>       
+            </RadzenCard>
+        }
+        else
+        {
+            <RadzenCard Variant="@Variant.Filled" class="rz-mt-2 rz-border-radius-3 rz-background-color-secondary-lighter card-style">
+
+                <RadzenText TextStyle="TextStyle.Body2">@message.MessageBody</RadzenText>
+
+                <RadzenStack>
+                    <RadzenText Text="@LocalDateTime(message.MessageDate).ToShortTimeString()"
+                        TextStyle="TextStyle.Caption" 
+                        TextAlign="TextAlign.Right" 
+                        Style="margin-bottom: 0; color: var(--rz-text-tertiary-color)">
+                    </RadzenText>
+                </RadzenStack>
+            </RadzenCard>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<ChatMessage> ChatData { get; set; } = new();
+
+    private DateTime currentDate = new();
+
+    private ClientSubscribe clientSubscribe = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        currentDate = new();
+
+        await ScrollDownAsync();
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected override void OnInitialized()
+    {
+        if (TimeProvider is BrowserTimeProvider browserTimeProvider)
+        {
+            browserTimeProvider.LocalTimeZoneChanged += LocalTimeZoneChanged;
+        }
+
+        long selectedLeadId = ChatData.Select(c => c.LeadId).FirstOrDefault();
+
+        clientSubscribe = new()
+        {
+            CompanyId = CurrentConsultant.CompanyId,
+            UserId = CurrentConsultant.Id,
+            LeadId = selectedLeadId,
+            OnNewChatMessage = AddNewMessageToChatList
+        };
+
+        _notificationService.Subscribe(clientSubscribe);
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        currentDate = new();
+
+        return base.OnParametersSetAsync();
+    }
+
+    private async void AddNewMessageToChatList(ChatMessage chatMessage)
+    {
+        chatMessage.MessageDate = LocalDateTime(chatMessage.MessageDate);
+        ChatData.Add(chatMessage);
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Add Radzen class to style dinamically the message box
+    /// </summary>
+    /// <param name="messageStatus">Status of message</param>
+    /// <returns>Style class</returns>
+    private string AddRadzenClass(string messageStatus)
+    {
+        string style = $"rz-mt-2 rz-border-radius-3 card-style";
+
+        if (messageStatus.Equals(MessageStatusEnum.Failed.Name))
+        {
+            style += " rz-border-color-primary-darker";
+        }
+
+        return style;
+    }
+
+    /// <summary>
+    /// Get days division to show in the chat area
+    /// </summary>
+    /// <param name="messageDate">Date of messages</param>
+    /// <returns>Date to show in the chat divider</returns>
+    private string GetDayNamesOrDate(DateTime messageDate)
+    {
+        DateTime today = LocalDateTime(DateTime.UtcNow);
+
+        DateTime yesterday = today.AddDays(-1);
+        DateTime threeDaysAgo = today.AddDays(-3);
+        DateTime fiveDaysAgo = today.AddDays(-5);
+
+        if (messageDate.Date == today.Date)
+        {
+            return "Hoje";
+        }
+
+        if (messageDate.Date == yesterday.Date)
+        {
+            return "Ontem";
+        }
+
+        if (messageDate.Date >= threeDaysAgo.Date && messageDate.Date <= fiveDaysAgo.Date)
+        {
+            return messageDate.Date.DayOfWeek.ToString();
+        }
+
+        return messageDate.ToShortDateString();
+    }
+
+    public override void Dispose() => _notificationService.Unsubscribe(clientSubscribe);
+
+    /// <summary>
+    /// Scrolldown automatically
+    /// </summary>
+    /// <returns></returns>
+    private async Task ScrollDownAsync() => await JSRuntime.InvokeVoidAsync("scrollToBottom");
+}
+
+<style>
+    .card-style {
+        max-width: 60% !important;
+        min-width: 15% !important;
+        text-align: start !important;
+        padding: 0.8rem !important;
+        padding-top: 5px !important;
+        padding-bottom: 5px !important;
+    }
+</style>

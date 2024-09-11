@@ -1,0 +1,204 @@
+﻿@page "/"
+
+@using AdaptiveKitCore.Enums
+@using AdaptiveKitCore.Requests
+@using AdaptiveKitCore.Responses
+@using CrossCutting.Enums
+@using CrossCutting.Models
+@using InteractiveLead.App.Components.Pages.Manager.Adapters
+@using InteractiveLead.App.Providers
+@using InteractiveLead.App.Services
+@using Microsoft.AspNetCore.Authorization
+@using Radzen.Blazor.Rendering
+@using InteractiveLead.App.Adapters
+@using InteractiveLead.App.Pages.Manager.Adapter
+@using InteractiveLead.Core.Enums
+@using InteractiveLead.Core.Models
+@using InteractiveLead.App.Components.Pages.Manager.Shared
+@using InteractiveLead.Core.NotifyServices
+@using InteractiveLead.Core.Responses
+@using InteractiveLead.Core.Views
+
+@attribute [Authorize]
+
+@inherits AppComponentBase
+
+@inject ChatMessageAdapter _chatMessageAdapter
+@inject LeadsManagerHomeAdapter _leadsManagerAdapter
+@inject ManagerAdapter _managerAdapter
+@inject NavigationManager _navigation
+@inject MessageNotifyService _notificationService
+
+<PageTitle>Lead Manager</PageTitle>
+
+<!-- Row & column: the lead manager container -->
+<RadzenRow class="rz-text-align-center" Gap="0" Style="height: calc(100vh - 53px);">
+   <RadzenColumn>
+       <!-- Header of lead manager component -->
+       <RadzenRow Gap="5">
+           <RadzenColumn>
+                <TotalSummaryComponent 
+                    TotalSummary="@_totalSummary" 
+                    OnSelectedLeadStatus="OnStatusLeadSelectedAsync" 
+                    OnShowAllLeads="OnShowAllLeadsAsync" />
+           </RadzenColumn>           
+       </RadzenRow>
+
+       <!-- Row with 3 column: list of leads, chat, Q&A -->
+        <RadzenRow Style="height: calc(100vh - 112px);">
+             <!-- List of leads column -->
+             <RadzenColumn Size="4" class="rz-shadow-10 rz-px-1" Style="display: flex; flex-direction: column; height: 100%;">
+               <LeadsListComponent OnSelectLead="OnHandleSelectedList" 
+                 OnAddNewLead="FetchTotalCountsAsyc" @ref="LeadsListRef" />
+                <QuestionListComponent />
+             </RadzenColumn>
+
+             <!-- Chat column -->
+            <RadzenColumn Style="display: flex; flex-direction: column; height: 100%">
+
+                <!-- Header (Panel) of the chat -->
+                <RadzenCard Variant="@Variant.Filled"
+                            Style="padding: 0; height: 100px"
+                            class="w-100">
+
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Start">
+                        <RadzenImage Path="https://http2.mlstatic.com/D_726750-MLA77356956841_062024-O.jpg"
+                                     Style="width: 60px; height: 60px; object-fit: cover; border-radius: 10px" 
+                                     AlternateText="community" />
+
+                        <RadzenText TextStyle="TextStyle.Body2">
+                            TV Sumsung 29'' 
+                        </RadzenText>
+                    </RadzenStack>        
+
+                    <RadzenText TextStyle="TextStyle.Body2">
+                        @_leadSelected?.LeadName
+                    </RadzenText>
+                </RadzenCard>
+
+                <!-- Chat wrapper -->
+                <RadzenStack id="chatContainer" class="rz-pb-2" Style="overflow-y: auto; flex: 1">
+                    @if (_leadSelected != null)
+                    {
+                        <ChatMessageBoxComponent ChatData="@_leadSelected.ChatMessages" />
+                    }        
+                </RadzenStack>
+
+                <!-- Message text sender and toolbox -->
+                <RadzenRow class="rz-mx-1" Visible="_leadSelected != null">
+                    <RadzenColumn>
+                        <SendMessageToolBoxComponent @ref="MessageInputRef" 
+                                                     OnSendMessage="@SendMessageToLeadAsync" 
+                                                     IsDisabled="@(!_leadSelected?.CanSendMessage ?? true)" />
+                    </RadzenColumn>
+                </RadzenRow>
+            </RadzenColumn>         
+        </RadzenRow>
+    </RadzenColumn>
+</RadzenRow>
+
+@code {
+    private string searchValue = string.Empty;
+
+    #region Component References
+    private LeadsListComponent LeadsListRef { get; set; } = new();    
+
+    private SendMessageToolBoxComponent MessageInputRef { get; set; } = new();
+    #endregion
+
+    /// <summary>Lead Selected</summary>
+    private LeadInfoCard? _leadSelected { get; set; } = null;
+
+    /// <summary>Input text of the consultant</summary>
+    private string _textAreaValue = string.Empty;
+
+    /// <summary> Totals of the leads by status and category</summary>
+    public TotalSummary _totalSummary = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TimeProvider is BrowserTimeProvider browserTimeProvider)
+        {
+            browserTimeProvider.LocalTimeZoneChanged += LocalTimeZoneChanged;
+        }
+
+        await base.OnInitializedAsync();
+
+        await FetchTotalCountsAsyc();       
+    }
+
+    private async Task FetchTotalCountsAsyc()
+    {
+        FilterRequest filterRequest = new();
+
+        if (!IsSysAdmin)
+        {
+            filterRequest.AddFilter(nameof(Lead.CompanyId), FilterOperatorEnum.EqualTo, CurrentConsultant.CompanyId);
+        }
+
+        // Should be consultant role
+        if (IsConsultant)
+        {
+            filterRequest.AddFilter(nameof(Lead.ConsultantId), FilterOperatorEnum.EqualTo, CurrentConsultant.Id);
+        }
+
+        SimpleResponse<TotalSummary> response = await _managerAdapter.FetchTotalCountsAsyc(filterRequest);
+        if (response.HasErrorMessage || response.HasExcptionMessage)
+        {
+            return;
+        }
+
+        _totalSummary = response.Model ?? new();
+    }
+
+    /// <summary>
+    /// Handle Emoji and insert in input text
+    /// </summary>
+    /// <param name="emoji">Emoji selected</param>
+    private void HandleEmojiClick(string emoji) => _textAreaValue += emoji;
+
+    /// <summary>
+    /// When select or change leads from lead list
+    /// </summary>
+    /// <param name="lead"></param>
+    private void OnHandleSelectedList(LeadInfoCard LeadInfo)
+    {
+        _leadSelected = LeadInfo;
+        MessageInputRef.Clear();
+    }
+
+    private async Task OnStatusLeadSelectedAsync(LeadStatusEnum status)
+    {
+        await LeadsListRef.LoadInfoCardsByLeadStatus(status);
+    }
+
+    private async Task OnShowAllLeadsAsync(bool isShowAllLeads)
+    {
+        await LeadsListRef.ShowAllLeadsAsync(isShowAllLeads);
+    }
+
+    /// <summary>
+    /// Send Message to lead
+    /// </summary>
+    /// <returns>text from input</returns>
+    private async Task SendMessageToLeadAsync(ChatMessage chatMessage)
+    {
+        if (_leadSelected == null) return;
+
+        chatMessage.ConsultantId = _leadSelected.ConsultantId;
+        chatMessage.LeadId = _leadSelected.LeadId;
+        chatMessage.MessageSender = ChatMessageEnum.Consultant.Name;
+        chatMessage.MessageDate = DateTime.UtcNow;
+
+        _leadSelected.AddMessage(chatMessage);
+
+        string status = _leadSelected.LeadStatus;
+
+        await _chatMessageAdapter.RegisterChatMessageAsync(chatMessage);        
+
+        if (status != _leadSelected.LeadStatus)
+        {
+            await FetchTotalCountsAsyc();
+        }       
+    }
+}

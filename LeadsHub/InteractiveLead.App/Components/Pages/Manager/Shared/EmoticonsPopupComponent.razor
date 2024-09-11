@@ -1,0 +1,143 @@
+﻿
+<RadzenTabs TabPosition="TabPosition.Bottom" >
+    <Tabs>
+        @foreach (var emojiSection in emojiBuilder.BuildEmojiSections())
+        {
+            <RadzenTabsItem Icon="@emojiSection.SectionIcon">
+                <RadzenPanel Style="height: 150px">
+                @foreach (var emoji in emojiSection.Emoticons)
+                {
+                    <RadzenButton Text="@emoji"
+                                  ButtonType="ButtonType.Button"
+                                  Variant="Variant.Text"
+                                  ButtonStyle="ButtonStyle.Secondary"
+                                  Click="@(() => OnEmojiSelectAsync(emoji))" />
+                }
+                </RadzenPanel>
+            </RadzenTabsItem>
+        }
+    </Tabs>
+</RadzenTabs>
+
+@code {
+    [Parameter]
+    public EventCallback<string> OnEmojiClick { get; set; }
+
+    private EmojiBuilder emojiBuilder = new();
+
+    /// <summary>
+    /// Get the emoji clicked and send to parent component
+    /// </summary>
+    /// <param name="emoji">Hex of emoji selected</param>
+    /// <returns>Task</returns>
+    private async Task OnEmojiSelectAsync(string emoji) => await OnEmojiClick.InvokeAsync(emoji);
+
+
+    class EmojiBuilder
+    {
+        public List<string> Emoticons { get; private set; } = new();
+
+        public string SectionIcon { get; set; } = string.Empty;
+
+        public string SectionName { get; private set; } = string.Empty;
+
+        private List<string> smileys = new()
+        {
+            "\U0001F600", // 😀 Grinning face
+            "\U0001F603", // 😃 Grinning face with open mouth
+            "\U0001F604", // 😄 Smiling Face with open mouth and smiling eyes
+            "\U0001F601", // 😁 Grinning face with Smiling eyes
+            "\U0001F606", // 😆 Smiling face with open mouth and thightly-closed eyes
+            "\U0001F605", // 😅 Rosto sorridente com suor frio
+            "\U0001F602", // 😂 Face with tears of joy
+            "\U0001F60A", // 😊 Rosto sorridente com olhos sorridentes
+            "\U0001F607", // 😇 Rosto sorridente com auréola
+            "\U0001F609", // 😉 Rosto piscando
+            "\U0001F60D", // 😍 Rosto com olhos de coração
+            "\U0001F618", // 😘 Rosto mandando beijo
+            "\U0001F617", // 😗 Rosto beijando
+            "\U0001F619", // 😙 Rosto beijando com olhos sorridentes
+            "\U0001F61A", // 😚 Rosto beijando com olhos fechados
+            "\U0001F60B", // 😋 Rosto saboreando comida
+            "\U0001F61C", // 😜 Rosto piscando e mostrando a língua
+            "\U0001F61D", // 😝 Rosto mostrando a língua e apertando os olhos
+            "\U0001F61B", // 😛 Rosto mostrando a língua
+            "\U0001F911", // 🤑 Rosto com símbolo de dinheiro na boca
+            "\U0001F917", // 🤗 Rosto abraçando
+            "\U0001F914", // 🤔 Rosto pensativo
+        };
+
+        // Gestos
+        private List<string> gestures = new()
+        {
+            "\U0001F44D", // 👍 Polegar para cima
+            "\U0001F44E", // 👎 Polegar para baixo
+            "\U0001F44B", // 👋 Mão acenando
+            "\U0001F91A", // 🤚 Mão levantada
+            "\U0001F590", // 🖐 Mão com dedos abertos
+            "\U0000270B", // ✋ Mão levantada
+            "\U0001F596", // 🖖 Saudação vulcana
+            "\U0001F44C", // 👌 Mão fazendo sinal de OK
+            "\U0000270C", // ✌ Mão fazendo sinal de paz
+            "\U0001F91E", // 🤞 Dedos cruzados
+            "\U0001F91F", // 🤟 I Love You
+            "\U0001F918", // 🤘 Mão fazendo sinal de chifres
+            "\U0001F448", // 👈 Dedo indicador apontando para a esquerda
+            "\U0001F449", // 👉 Dedo indicador apontando para a direita
+            "\U0001F446", // 👆 Dedo indicador apontando para cima
+            "\U0001F447", // 👇 Dedo indicador apontando para baixo
+            "\U0000261D", // ☝ Dedo indicador apontando para cima
+            "\U0000270D", // ✍ Mão escrevendo
+            "\U0001F933", // 🤳 Mão tirando selfie
+        };
+
+        // Corações
+        private List<string> hearts = new()
+        {
+            "\U00002764", // ❤️ Coração vermelho
+            "\U0001F49B", // 💛 Coração amarelo
+            "\U0001F49A", // 💚 Coração verde
+            "\U0001F499", // 💙 Coração azul
+            "\U0001F49C", // 💜 Coração roxo
+            "\U0001F5A4", // 🖤 Coração preto
+            "\U0001F90D", // 🤍 Coração branco
+            "\U0001F90E", // 🤎 Coração marrom
+        };
+
+        // Animais
+        private List<string> animals = new()
+        {
+            "\U0001F436", // 🐶 Cachorro
+            "\U0001F431", // 🐱 Gato
+            "\U0001F42D", // 🐭 Rato
+            "\U0001F439", // 🐹 Hamster
+            "\U0001F430", // 🐰 Coelho
+            "\U0001F98A", // 🦊 Raposa
+            "\U0001F43B", // 🐻 Urso
+            "\U0001F43C", // 🐼 Panda
+            "\U0001F428", // 🐨 Coala
+            "\U0001F42F", // 🐯 Tigre
+            "\U0001F981", // 🦁 Leão
+            "\U0001F42E", // 🐮 Vaca
+            "\U0001F437", // 🐷 Porco
+            "\U0001F438", // 🐸 Sapo
+        };
+
+        public List<EmojiBuilder> BuildEmojiSections()
+        {
+            List<EmojiBuilder> emojiBuilders = new();
+
+            emojiBuilders.Add(new() { SectionName = "Smileys & People", SectionIcon = "sentiment_very_satisfied", Emoticons = smileys });
+            emojiBuilders.Add(new() { SectionName = "Hearts", SectionIcon = "favorite_border", Emoticons = hearts });
+            emojiBuilders.Add(new() { SectionName = "Animals", SectionIcon = "pets", Emoticons = animals });
+            emojiBuilders.Add(new() { SectionName = "Food", SectionIcon = "fastfood", Emoticons = hearts });    
+            emojiBuilders.Add(new() { SectionName = "Sports", SectionIcon = "sports_basketball", Emoticons = animals });
+            emojiBuilders.Add(new() { SectionName = "Travel & Places", SectionIcon = "flight_takeoff", Emoticons = animals });
+            emojiBuilders.Add(new() { SectionName = "Objects", SectionIcon = "emoji_object", Emoticons = animals });
+            emojiBuilders.Add(new() { SectionName = "animals", SectionIcon = "emoji_symbols", Emoticons = animals });
+            emojiBuilders.Add(new() { SectionName = "Flags", SectionIcon = "flag", Emoticons = animals });
+
+            return emojiBuilders;
+        }
+    }
+}

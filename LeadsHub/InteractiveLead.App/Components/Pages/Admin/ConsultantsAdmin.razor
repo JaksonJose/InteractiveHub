@@ -1,0 +1,80 @@
+﻿@page "/admin/consultants"
+@attribute [Authorize(Roles = "SysAdmin, Manager")]
+
+@using AdaptiveKitCore.Requests
+@using InteractiveLead.App.Components.Pages.Admin.Adapter
+@using InteractiveLead.App.Services
+@using InteractiveLead.Core.Models
+@using InteractiveLead.Core.Responses
+@using Microsoft.AspNetCore.Authorization
+
+@inject ConsultantAdminAdapter _consultantAdapter;
+@inject NavigationManager _navigation;
+
+<RadzenPanel>
+    <HeaderTemplate>
+        <RadzenStack Orientation="Orientation.Horizontal" 
+                     JustifyContent="JustifyContent.End"
+                     class="rz-mb-1"
+                     Style="width: 100%;">
+
+            <RadzenButton Text="Novo Consultor" 
+                          Icon="add" 
+                          ButtonStyle="ButtonStyle.Info" 
+                          Click="RedirectToConsultantPage" />
+        </RadzenStack>
+    </HeaderTemplate>
+    <ChildContent>
+        <RadzenDataGrid TItem="Consultant"
+                        Data="@consultants"
+                        AllowFiltering="true"
+                        AllowSorting="true"
+                        FilterMode="FilterMode.Advanced">
+        <Columns>
+            <RadzenDataGridColumn TItem="Consultant" Property="@nameof(Consultant.FullName)" Title="Nome" />
+            <RadzenDataGridColumn TItem="Consultant" Property="@nameof(Consultant.CompanyName)" Title="Empresa" />
+
+            <RadzenDataGridColumn Title="Ativo" Filterable="false" Width="80px">
+                <Template>
+                    <RadzenSwitch Value="true" InputAttributes="@(new Dictionary<string,object>(){ { "aria-label", "Switch value" }})" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Title="Editar" Filterable="false" Width="60px">
+                <Template>
+                  <RadzenButton Icon="edit" 
+                                ButtonStyle="ButtonStyle.Primary" 
+                                Variant="Variant.Flat" 
+                                Size="ButtonSize.Medium" 
+                                Click="@(() => RedirectToConsultantPage(context))" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+    </ChildContent>
+</RadzenPanel>
+
+
+@code {
+    List<Consultant> consultants = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        FilterRequest filterRequest = new();
+
+        ConsultantResponse response = await _consultantAdapter.FetchConsultantsByRequestAsync(filterRequest);
+
+        consultants = response.ResponseData;
+
+        await base.OnInitializedAsync();
+    }
+
+    private void RedirectToConsultantPage(Consultant consultant)
+    {
+        _navigation.NavigateTo($"admin/consultants/{consultant.AspNetUserId}");
+    }
+
+    private void RedirectToConsultantPage()
+    {
+        _navigation.NavigateTo($"admin/consultants/0");
+    }
+}

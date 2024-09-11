@@ -1,0 +1,43 @@
+version: '3.4'
+
+networks:
+  interactive_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+  pgadmin4_net:
+
+volumes:
+  interactive_data:
+  pgadmin4:
+  rabbitmq_data:
+
+services:
+  interactivedb:
+    image: "postgres:latest"
+
+  pgadmin4:
+    image: "dpage/pgadmin4"
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+
+  interactivelead.app:
+    image: ${DOCKER_REGISTRY-}interactiveleadapp
+    build:
+      context: .
+      dockerfile: LeadsHub/InteractiveLead.App/Dockerfile
+
+  whatsapp.api:
+    image: ${DOCKER_REGISTRY-}whatsappapi
+    build:
+      context: .
+      dockerfile: Integrations/Whatsapp/Whatsapp.Api/Dockerfile
+
+#  meracadolivre.api:
+#    image: ${DOCKER_REGISTRY-}meracadolivreapi
+#    build:
+#      context: .
+#      dockerfile: Integrations/MercadoLivre/MeracadoLivre.Api/Dockerfile
+

@@ -1,0 +1,32 @@
+﻿@page "/teste";
+
+@inject DialogService _dialogService
+
+<RadzenStack Style="height: 100%;">
+    <RadzenHtmlEditor @bind-Value="@TextValue" style="height: 140px;">
+        <RadzenHtmlEditorUndo />
+        <RadzenHtmlEditorRedo />
+    </RadzenHtmlEditor>
+
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End">
+        <RadzenButton Text="Salvar" ButtonStyle="ButtonStyle.Secondary" Click="SaveAnnotation" />
+        <RadzenButton Text="Cancelar" Click="@CancelDialog" />
+    </RadzenStack>
+</RadzenStack>
+
+
+@code {
+    public string TextValue { get; set; } = string.Empty;
+
+    private void SaveAnnotation()
+    {
+        var teste = TextValue;
+
+        _dialogService.Close(teste);
+    }
+
+    private void CancelDialog()
+    {
+        _dialogService.Close();
+    }
+}

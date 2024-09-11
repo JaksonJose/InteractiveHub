@@ -1,0 +1,150 @@
+﻿@page "/admin/consultants/{aspNetUserId}"
+
+@attribute [Authorize(Roles = "SysAdmin")]
+
+@using AdaptiveKitCore.Enums
+@using AdaptiveKitCore.Requests
+@using AdaptiveKitCore.Responses
+@using InteractiveLead.App.Adapters
+@using InteractiveLead.App.Components.Pages.Admin.Adapter
+@using InteractiveLead.App.Data
+@using InteractiveLead.Core.Enums
+@using InteractiveLead.Core.Models
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+
+@inject ConsultantAdminAdapter _consultantAdapter;  
+@inject UserManager<ApplicationUser> _userManager;
+@inject NotificationService _notificationService
+
+
+<RadzenPanel>
+    <RadzenTemplateForm TItem="UserRegister" Data="@UserRegister" Submit="(UserRegister args) => OnSubmitAsync(args)">
+        <RadzenFieldset>
+            <RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3">Nome Completo</RadzenText>
+            <RadzenTextBox @bind-Value="@UserRegister.FullName" Placeholder="Nome Completo"/>
+
+            <RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3">Email</RadzenText>
+            <RadzenTextBox @bind-Value="@UserRegister.Email" />
+
+            <RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.H3">Password</RadzenText>
+            <RadzenTextBox @bind-Value="@UserRegister.Password" />
+            
+            <RadzenDropDown @bind-Value="AppRolesEnum" Data="@RolesEnum.List" TextProperty="Name" />
+        </RadzenFieldset>
+    
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Right" Gap="1rem" Class="rz-mt-8 rz-mb-4">
+            <RadzenButton Text="Save" ButtonType="ButtonType.Submit" Size="ButtonSize.Medium" Icon="save" />
+            <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Variant="Variant.Flat" Size="ButtonSize.Medium" Icon="cancel" />
+        </RadzenStack>
+    </RadzenTemplateForm>
+</RadzenPanel>
+
+@code {
+    [Parameter]
+    public string AspNetUserId { get; set; } = string.Empty;
+
+    public UserRegister UserRegister { get; set; } = new();
+
+    public RolesEnum AppRolesEnum { get; set; } = RolesEnum.NormalUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        FilterRequest filterResquest = new();
+        filterResquest.AddFilter(nameof(Consultant.AspNetUserId), FilterOperatorEnum.EqualTo, AspNetUserId);
+
+        var response = await _consultantAdapter.FetchConsultantsByRequestAsync(filterResquest);
+        var userApp = await _userManager.FindByIdAsync(AspNetUserId);
+        if (userApp == null) return;
+
+        this.UserRegister = new()
+        {
+          FullName = response.ResponseData[0].FullName,
+          Email = userApp.Email!,
+        };
+
+        await base.OnInitializedAsync();
+    }
+
+    private async void OnSubmitAsync(UserRegister userRegister)
+    {
+        ApplicationUser? appUser = await _userManager.FindByEmailAsync(userRegister.Email);
+
+        if (appUser != null)
+        {
+            _notificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Info,
+                Duration = 40000,
+                Summary = "Crendenciais Já exite",
+                Detail = ""
+            });
+
+            return;
+        }
+
+        appUser = new()
+        {
+            UserName = UserRegister.Email,
+            Email = userRegister.Email,
+        };
+
+        IdentityResult result = await _userManager.CreateAsync(appUser, userRegister.Password);
+
+        if (!result.Succeeded)
+        {
+            _notificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Error,
+                Duration = 40000,
+                Summary = "Erro ao criar authenticação",
+                Detail = ""
+            });
+
+            return;
+        }
+
+        result = await _userManager.AddToRoleAsync(appUser, AppRolesEnum.Name);
+
+        appUser = await _userManager.FindByEmailAsync(userRegister.Email);
+
+        Consultant consultant = new()
+        {
+            AspNetUserId = appUser!.Id,
+            FullName = userRegister.FullName,
+            CompanyId = 1,
+            Active = true
+        };
+
+        ModelResponse response = await _consultantAdapter.RegisterConsultantAsync(consultant);
+
+        if (response.HasErrorMessage || response.HasExcptionMessage)
+        {
+            _notificationService.Notify(new NotificationMessage
+            {
+                Severity = NotificationSeverity.Error,
+                Duration = 40000,
+                Summary = response.Messages[0].MessageText,
+                Detail = ""
+            });
+
+            UserRegister = new();
+
+            StateHasChanged();
+
+            return;
+        }
+
+        _notificationService.Notify(new NotificationMessage
+        {
+            Severity = NotificationSeverity.Success,
+            Duration = 40000,
+            Summary = response.Messages[0].MessageText,
+            Detail = ""
+        });
+
+        UserRegister = new();
+
+        StateHasChanged();
+    }
+}

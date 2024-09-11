@@ -1,0 +1,358 @@
+﻿@using AdaptiveKitCore.Enums
+@using AdaptiveKitCore.Requests
+@using InteractiveLead.App.Adapters
+@using InteractiveLead.App.Components.Pages.Manager.Adapters
+@using InteractiveLead.App.Providers
+@using InteractiveLead.App.Services
+@using InteractiveLead.Core.Enums
+@using InteractiveLead.Core.Models
+@using InteractiveLead.Core.NotifyServices
+@using InteractiveLead.Core.Responses
+
+@inherits AppComponentBase
+
+@inject ChatMessageAdapter _chatMessageAdapter
+@inject LeadListAdapter _leadInfoAdapter
+@inject LeadsManagerHomeAdapter _leadsManagerAdapter
+@inject MessageNotifyService _notificationService
+
+<!--Quick Filter-->
+<RadzenCard Style="min-height: 80px; padding: 0.4rem">
+  <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween">
+      <div>      
+        <RadzenSplitButton Icon="swap_vert" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined">
+        <ChildContent>
+          <RadzenSplitButtonItem Text="Mensagens Recentes" Value="1"/>
+          <RadzenSplitButtonItem Text="Mensagens Mais Antigas" Value="1" />
+          <RadzenSplitButtonItem Text="Leads Recentes" Value="2" />
+          <RadzenSplitButtonItem Text="Leads Mais Antigos" Value="2" />
+        </ChildContent>
+      </RadzenSplitButton>
+        </div>
+
+      <RadzenStack AlignItems="AlignItems.Center" JustifyContent="JustifyContent.Center">
+          <RadzenSelectBar TValue="string" @bind-Value="searchOptions" Size="ButtonSize.Small">
+              <Items>
+                  <RadzenSelectBarItem Value="nameof(Consultant.FullName)" Text="Consultor" />
+                  <RadzenSelectBarItem Value="nameof(Lead.Name)" Text="Lead" />
+                  <RadzenSelectBarItem Value="nameof(Lead.PhoneNumber)" Text="Telefone" />
+              </Items>
+          </RadzenSelectBar>
+            <RadzenTextBox Placeholder="Digite o nome" 
+                @bind-Value="inputValue" 
+                @oninput="OnInputSearchAsync" 
+                Disabled="@(string.IsNullOrEmpty(searchOptions))"
+                Style="margin-top: 0.4rem;" />
+      </RadzenStack>
+
+        <span>+ filtros</span>
+    </RadzenStack>
+</RadzenCard>
+
+
+<RadzenDataList @ref="DataListRef" 
+                TItem="LeadInfoCard"
+                Data="@LeadInfoCardList" 
+                LoadData="@FetchLeadsListAsync" 
+                Count="@count"
+                AllowVirtualization="true" 
+                Style="overflow-y: auto; flex: 1" class="rz-pt-2">
+    <Template>
+        <RadzenButton ButtonStyle="ButtonStyle.Secondary" 
+                      Variant="Variant.Outlined" 
+                      Style="width: 100%; padding: 0.5rem;" 
+                      Click="@(() => FetchMessagesByLeadId(context))" 
+                      class="@(context.LeadId.Equals(LeadSelected?.LeadId) ? "button-active" : "")">
+            
+            <!--Box wrapper -->
+            <RadzenStack Orientation="Orientation.Horizontal" Style="width: 100%;">
+                <RadzenStack Orientation="Orientation.Vertical"
+                             AlignItems="AlignItems.Start" JustifyContent="JustifyContent.Start"
+                             Style="width: 100%;">
+
+                    <RadzenText TextStyle="TextStyle.Body2" Style="margin: 0">
+                        <strong>@context.LeadName</strong>
+                    </RadzenText>
+
+                    <RadzenText TextStyle="TextStyle.Caption" Style="margin: 0">
+                        <strong>Consultor:</strong> @context.ConsultantName
+                    </RadzenText>
+
+                    <!--Date and time that the lead was registered int he system-->
+                    <RadzenText TextStyle="TextStyle.Caption" Style="margin: 0; margin-top: 0.5rem; font-size: 0.6rem">
+                        @LocalDateTime(context.CreatedAt).ToString("dd/MM/yy HH:mm")
+                    </RadzenText>
+                </RadzenStack>
+
+                <RadzenStack>
+                    <RadzenText Text="@GetDayNamesOrDate(context.LastMessageDate)" TextStyle="TextStyle.Caption" Style="color: var(--rz-text-secondary-color)" />
+                    <RadzenBadge Text="@context.TotalNewMessages.ToString()" 
+                                BadgeStyle="BadgeStyle.Secondary" 
+                                Variant="Variant.Filled" 
+                                Visible="@(context.TotalNewMessages > 0)" />
+                </RadzenStack>
+            </RadzenStack>
+        </RadzenButton>
+    </Template>
+</RadzenDataList>
+
+@code {
+
+    [Parameter]
+    public EventCallback<LeadInfoCard> OnSelectLead { get; set; }
+
+    [Parameter]
+    public EventCallback OnAddNewLead { get; set; }
+
+    /// <summary>List of the leads</summary>
+    public List<LeadInfoCard> LeadInfoCardList { get; set; } = new();
+
+    /// <summary>
+    /// Subscribe the client to receive
+    /// leads in realtime if it is logged
+    /// </summary>
+    private ClientSubscribe clientSubscribe = new();
+
+    /// <summary>
+    /// The reference of the Data List
+    /// </summary>
+    private RadzenDataList<LeadInfoCard> DataListRef = new();
+
+    /// <summary>
+    /// The text input to search
+    /// </summary>
+    private string inputValue  = string.Empty;
+
+    /// <summary>Lead Selected</summary>
+    private LeadInfoCard? LeadSelected { get; set; }
+    private LeadStatusEnum LeadStatus { get; set; } = LeadStatusEnum.New;
+
+    private string searchOptions = string.Empty;
+    private int leadListOrder = 1;
+    private bool isAllLeads = true;
+    private string? searchValue;
+
+    private bool activeButton;
+    private int count;
+    private bool isLoading;
+
+    private CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (TimeProvider is BrowserTimeProvider browserTimeProvider)
+        {
+            browserTimeProvider.LocalTimeZoneChanged += LocalTimeZoneChanged;
+        }
+
+        clientSubscribe = new()
+        {
+            CompanyId = CurrentConsultant.CompanyId,
+            UserId = CurrentConsultant.Id,
+            OnNewLeadReceived = AddNewLeadToList
+        };
+
+        _notificationService.Subscribe(clientSubscribe);
+    }
+
+    /// <summary>
+    /// Filter list by lead status
+    /// </summary>
+    /// <param name="status">status to be filtered</param>
+    /// <returns>Change state</returns>
+    public async Task LoadInfoCardsByLeadStatus(LeadStatusEnum status)
+    {      
+        LeadStatus = status;
+        isAllLeads = false;
+
+        await InvokeAsync(DataListRef.Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async Task LoadInfoCardsByOrderStatus(int orderOption)
+    {
+        leadListOrder = orderOption;
+
+        await InvokeAsync(DataListRef.Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async Task ShowAllLeadsAsync(bool isShowAllLeads)
+    {
+        isAllLeads = isShowAllLeads;
+
+        await InvokeAsync(DataListRef.Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Update list when new lead arrives
+    /// </summary>
+    private async void AddNewLeadToList()
+    {
+        await InvokeAsync(() => OnAddNewLead.InvokeAsync());     
+
+        if (LeadInfoCardList.Count <= 15)
+        {
+            await InvokeAsync(DataListRef.Reload);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Fetch the list of Leads
+    /// </summary>
+    /// <returns></returns>
+    private async Task FetchLeadsListAsync(LoadDataArgs args)
+    {
+        isLoading = true;
+
+        // Filter section
+        // TODO: Apply SOLID here
+        FilterRequest filterRequest = new();
+
+        filterRequest.Skip = args.Skip!.Value;
+        filterRequest.PageSize = args.Top!.Value;
+
+        if (!isAllLeads)
+        {
+            filterRequest.AddFilter(nameof(Lead.Status), FilterOperatorEnum.EqualTo, LeadStatus.Name);
+        }
+
+        // consultant or lead name or phone number
+        if (!string.IsNullOrEmpty(searchValue))
+        {
+            string alias = searchOptions switch
+            {
+                "Name" => "ld",
+                "FullName" => "c",
+                "PhoneNumber" => "ld",
+                _ => "",
+            };
+
+            filterRequest.AddFilter(searchOptions, FilterOperatorEnum.Contains, searchValue, alias);
+        }
+
+
+        if (!IsSysAdmin)
+        {
+            filterRequest.AddFilter(nameof(Lead.ConsultantId), FilterOperatorEnum.EqualTo, CurrentConsultant.Id, "ld");
+            filterRequest.AddFilter(nameof(Lead.CompanyId), FilterOperatorEnum.EqualTo, CurrentConsultant.CompanyId, "ld");
+        }
+
+        // Most recent
+        string propertieToOrder = leadListOrder == 1 ? nameof(Lead.CreatedAt) : nameof(LeadInfoCard.LastMessageDate);
+        filterRequest.AddSortExpressionDescending(propertieToOrder);
+
+        LeadInfoCardResponse leadResponse = await _leadInfoAdapter.FetchLeadsInfoToCardsByRequestAsync(filterRequest);
+
+        LeadInfoCardList = leadResponse.ResponseData;
+        count = leadResponse.TotalAvailableItems;
+
+        isLoading = false;
+    }
+
+    /// <summary>
+    /// Fetch the chat message of a lead
+    /// </summary>
+    /// <param name="leadId"></param>
+    /// <returns></returns>
+    private async Task FetchMessagesByLeadId(LeadInfoCard leadInfo)
+    {
+        LeadSelected = leadInfo;
+        ChatMessageResponse chatMessageResponse = await _chatMessageAdapter.FetchChatMessagesByLeadIdtAsync(leadInfo.LeadId);       
+
+        List<ChatMessage> chatMessages = chatMessageResponse.ResponseData;
+
+        // Convert to client local time zone
+        chatMessages.ForEach(chat => chat.MessageDate = LocalDateTime(chat.MessageDate));
+        chatMessages = chatMessages.OrderBy(message => message.MessageDate).ToList();
+
+        LeadSelected.AddMessages(chatMessages);
+        LeadSelected.VerifyCanSendMessage();
+
+        LeadSelected.ClearTotalNewMessages();
+
+        IEnumerable<long> messageIds = LeadSelected.ChatMessages.Where(c => c.MessageSender.Equals(ChatMessageEnum.Customer.Name)).Select(c => c.Id);
+
+        await _chatMessageAdapter.SetMessagesToReadAsync(messageIds);
+
+        await OnSelectLead.InvokeAsync(LeadSelected);
+    }
+
+    /// <summary>
+    /// Create the date or day name
+    /// </summary>
+    /// <param name="messageDate">Message date time</param>
+    /// <returns>Custom text</returns>
+    private string GetDayNamesOrDate(DateTime messageDate)
+    {
+        DateTime today = LocalDateTime(DateTime.UtcNow);
+        DateTime dateToReturn = LocalDateTime(messageDate);
+
+        DateTime yesterday = today.AddDays(-1);
+        DateTime threeDaysAgo = today.AddDays(-3);
+        DateTime fiveDaysAgo = today.AddDays(-5);
+
+        if (dateToReturn.Date == today.Date)
+        {
+            return dateToReturn.ToShortTimeString();
+        }
+
+        if (dateToReturn.Date == yesterday.Date)
+        {
+            return "Ontem";
+        }
+
+        if (dateToReturn.Date >= threeDaysAgo.Date && dateToReturn.Date <= fiveDaysAgo.Date)
+        {
+            return dateToReturn.Date.DayOfWeek.ToString();
+        }
+
+        return dateToReturn.Date.ToShortDateString();
+    }
+
+    /// <summary>
+    /// Search leads info card by consultant or lead name or lead phonenumber
+    /// </summary>
+    /// <param name="e"></param>
+    /// <returns></returns>
+    private async Task OnInputSearchAsync(ChangeEventArgs e)
+    {
+        _cts.Cancel();
+        _cts = new();
+
+        await Task.Delay(500, _cts.Token);
+
+        searchValue = e.Value?.ToString();
+
+        await InvokeAsync(DataListRef.Reload);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public override void Dispose()
+    {
+        _notificationService.Unsubscribe(clientSubscribe);
+    }
+}
+
+<style>
+    .rz-datalist-data {
+        padding: 0.2rem !important;
+    }
+
+    .rz-datalist-data > li:last-child {
+        padding: 0 !important;
+    }
+
+    .rz-button-box {
+        width: 100% !important;
+    }
+
+    .button-active {
+        background-color: var(--rz-secondary-lighter) !important;
+    }
+</style>

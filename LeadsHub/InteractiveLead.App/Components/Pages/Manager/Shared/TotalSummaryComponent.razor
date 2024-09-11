@@ -1,0 +1,100 @@
+﻿@using AdaptiveKitCore.Enums
+@using AdaptiveKitCore.Requests
+@using AdaptiveKitCore.Responses
+@using InteractiveLead.Core.Enums
+@using InteractiveLead.Core.Models
+@using InteractiveLead.Core.Views
+
+@inject TooltipService _tooltipService
+
+
+<RadzenCard class="rz-p-3">
+    <RadzenStack Orientation="Orientation.Horizontal">
+        <RadzenButton Variant="Variant.Filled" 
+                      ButtonStyle="ButtonStyle.Info" 
+                      Shade="Shade.Darker"
+                      MouseEnter="@(args => ShowTooltip(args, "Adicionar Um Lead", "--rz-info-darker"))">
+            <RadzenIcon Icon="person_add" />
+        </RadzenButton>
+
+        <RadzenButton Variant="Variant.Filled"
+                      MouseEnter="@(args => ShowTooltip(args, "Todos os Leads", "--rz-primary"))"
+                      Click="@(() => ShowAllLeadsAsync())">
+
+            <RadzenIcon Icon="all_inbox" />
+
+            <RadzenBadge Variant="Variant.Outlined"
+                         BadgeStyle="BadgeStyle.Light"
+                         Text="@TotalSummary.TotalAllLeads.ToString()"
+                         class="rz-ml-2" />
+        </RadzenButton>
+    
+        <RadzenButton Variant="Variant.Filled" 
+                      MouseEnter="@(args => ShowTooltip(args, "Novos Leads", "--rz-primary"))"
+                      Click="@(() => SelectLeadStatus(LeadStatusEnum.New))">
+            
+            <RadzenIcon Icon="notification_add" />
+            
+            <RadzenBadge Variant="Variant.Outlined" 
+                         BadgeStyle="BadgeStyle.Light" 
+                         Text="@TotalSummary.TotalNewLeads.ToString()"
+                         class="rz-ml-2" />
+        </RadzenButton>
+    
+        <RadzenButton Variant="Variant.Filled" 
+                      ButtonStyle="ButtonStyle.Secondary" 
+                      Shade="Shade.Light"
+                      MouseEnter="@(args => ShowTooltip(args, "Leads Em Negociação", "--rz-secondary"))"
+                      Click="@(() => SelectLeadStatus(LeadStatusEnum.InProgress))">
+
+            <RadzenIcon Icon="support_agent" />
+
+            <RadzenBadge Variant="Variant.Outlined" 
+                         BadgeStyle="BadgeStyle.Light" 
+                         Text="@TotalSummary.TotalInProgress.ToString()"
+                         class="rz-ml-2" />
+        </RadzenButton>
+    
+        <RadzenButton Variant="Variant.Filled" 
+                      ButtonStyle="ButtonStyle.Secondary" 
+                      Shade="Shade.Darker" 
+                      MouseEnter="@(args => ShowTooltip(args, "Leads Agendados", "--rz-secondary-darker"))"
+                      Click="@(() => SelectLeadStatus(LeadStatusEnum.Scheduled))">
+
+            <RadzenIcon Icon="calendar_month" />
+
+            <RadzenBadge Variant="Variant.Outlined" 
+                         BadgeStyle="BadgeStyle.Light" 
+                         Text="@TotalSummary.TotalScheduled.ToString()"
+                         class="rz-ml-2" />
+        </RadzenButton>
+    </RadzenStack>
+</RadzenCard>
+
+@code {
+    [Parameter]
+    public TotalSummary TotalSummary { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<LeadStatusEnum> OnSelectedLeadStatus { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OnShowAllLeads { get; set; }
+
+    private int optionValue = 1;
+
+    private async Task SelectLeadStatus(LeadStatusEnum status)
+    {
+        await OnSelectedLeadStatus.InvokeAsync(status);
+    }
+
+    private async Task ShowAllLeadsAsync()
+    {
+        await OnShowAllLeads.InvokeAsync(true);
+    }
+
+    private void ShowTooltip(ElementReference elementReference, string text, string backgroundColor)
+    { 
+        _tooltipService.Open(elementReference, text, new TooltipOptions() { Style = $"background: var({backgroundColor});" });
+    }
+}

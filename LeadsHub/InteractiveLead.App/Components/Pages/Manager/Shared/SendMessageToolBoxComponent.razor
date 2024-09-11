@@ -1,0 +1,136 @@
+﻿@using AdaptiveKitCore.Responses
+@using InteractiveLead.App.Adapters
+@using InteractiveLead.App.Components.Pages.Manager.Shared.Dialog
+@using InteractiveLead.Core.Enums
+@using InteractiveLead.Core.Models
+@using Radzen.Blazor.Rendering
+
+
+@inject LeadsManagerHomeAdapter _leadsManagerAdapter
+@inject DialogService _dialogService
+@inject TooltipService _tooltipService
+
+<!-- Tool box and input text -->
+ <RadzenStack Orientation="Orientation.Horizontal" Gap="2">
+    <RadzenStack>
+        <RadzenButton @ref=button 
+                      Icon="sentiment_satisfied_alt"
+                      Size="ButtonSize.Small"
+                      ButtonStyle="ButtonStyle.Secondary"
+                      Variant="Variant.Outlined"
+                      Click="@(() => popup.ToggleAsync(button.Element))"
+                      MouseEnter="@(args => ShowTooltip(args, "Emoticons", "--rz-secondary-darker"))"
+                      Disabled="@IsDisabled"
+                      Style="height: 100%" />
+    
+        <Popup @ref=popup
+               Lazy=true
+               Style="display:none; position:absolute; margin-top: -5px; height: 240px; width: 490px; padding: 5px; border: var(--rz-panel-border); background-color:var(--rz-panel-background-color);">
+    
+            <EmoticonsPopupComponent OnEmojiClick="HandleEmojiClick" />
+        </Popup>
+    </RadzenStack>
+
+    <!-- Annotation button -->
+    <RadzenButton Icon="note_add" 
+                  ButtonStyle="ButtonStyle.Secondary" 
+                  Variant="Variant.Outlined"
+                  MouseEnter="@(args => ShowTooltip(args, "Anotação", "--rz-secondary-darker"))"
+                  Click="@OpenAnnotationDialogAsync" />
+    
+    <!-- Template button -->
+    <RadzenButton Icon="" 
+                  Text="Templates"
+                  ButtonStyle="ButtonStyle.Secondary"
+                  Variant="Variant.Outlined"
+                  MouseEnter="@(args => ShowTooltip(args, "Templates", "--rz-secondary-darker"))" />
+</RadzenStack>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Stretch">
+    <!-- Text area input -->
+    <RadzenTextArea 
+        @bind-Value=@TextAreaValue
+                    Disabled="@IsDisabled"
+        Style="resize: none; width: 100%"/>
+
+    <!-- button to send message -->
+    <RadzenButton Click="SendMessageToLeadAsync"
+                  Icon="send"
+                  ButtonStyle="ButtonStyle.Secondary"
+                  Disabled="@IsDisabled"
+                  class="rz-ms-1"
+                  Style="width: 60px"/>
+</RadzenStack>                
+
+@code {
+
+    [Parameter]
+    public EventCallback<ChatMessage> OnSendMessage { get; set; }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    private RadzenButton button = new();
+    private Popup popup = new();
+
+    /// <summary>Input text of the consultant</summary>
+    private string TextAreaValue = string.Empty;
+
+    public void Clear() =>  TextAreaValue = string.Empty;
+
+    /// <summary>
+    /// Handle Emoji and insert in input text
+    /// </summary>
+    /// <param name="emoji">Emoji selected</param>
+    private void HandleEmojiClick(string emoji) => TextAreaValue += emoji;
+
+    private async void OpenAnnotationDialogAsync()
+    {
+        var result = await _dialogService.OpenAsync<DialogAnnotation>("Anotação", null,
+            new DialogOptions() { Width = "700px", Height = "280px", Resizable = false, Draggable = true  });
+
+        if (result == null)
+        {
+            return;
+        }
+
+        string noteValue = result;
+
+        SaveNoteAsync(noteValue);
+    }
+
+    private async void SaveNoteAsync(string noteValue)
+    {
+        ChatMessage chatMessage = new()
+        {
+            MessageBody = noteValue,
+            MessageType = MessageTypeEnum.Note.Name,
+        };
+
+        await OnSendMessage.InvokeAsync(chatMessage);
+    }
+
+    /// <summary>
+    /// Send message to lead
+    /// </summary>
+    private async void SendMessageToLeadAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TextAreaValue))
+            return;
+
+        ChatMessage chatMessage = new()
+        {
+            MessageBody = TextAreaValue,
+            MessageType = MessageTypeEnum.Text.Name,
+        };
+
+        TextAreaValue = string.Empty;
+        
+        await OnSendMessage.InvokeAsync(chatMessage);
+    }
+
+    private void ShowTooltip(ElementReference elementReference, string text, string backgroundColor)
+    {
+        _tooltipService.Open(elementReference, text, new TooltipOptions() { Style = $"background: var({backgroundColor});" });
+    }
+}
